@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package converter_service;
+
+service ConverterService {
+    rpc ConvertToGIF(GIFRequest) returns (GIFResponse);
+    rpc ConvertToWEBP(WEBPRequest) returns (WEBPResponse);
+    rpc ConvertToMP4(MP4Request) returns (MP4Response);
+    rpc ConvertToPNG(PNGRequest) returns (PNGResponse);
+}
+
+message GIFRequest {
+    bytes content = 1;
+}
+
+message GIFResponse {
+    bytes content = 1;
+}
+
+message WEBPRequest {
+    bytes content = 1;
+}
+
+message WEBPResponse {
+    bytes content = 1;
+}
+
+message MP4Request {
+    bytes content = 1;
+}
+
+message MP4Response {
+    bytes content = 1;
+}
+
+message PNGRequest {
+    bytes content = 1;
+}
+
+message PNGResponse {
+    bytes content = 1;
+}
