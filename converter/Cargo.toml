@@ -8,6 +8,8 @@ name = "converter-server"
 path = "src/main.rs"
 
 [dependencies]
+flate2 = "1.0.35"
+lottieconv = "0.3.0"
 prost = "0.13.4"
 serde = { version = "1.0.216", features = ["derive"] }
 tempfile = "3.14.0"

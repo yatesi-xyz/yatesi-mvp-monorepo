@@ -1,7 +1,17 @@
-FROM clux/muslrust:1.83.0-stable AS chef
+FROM rust:1.83 AS chef
+WORKDIR /app
 USER root
 RUN cargo install cargo-chef
-WORKDIR /app
+RUN apt-get update && apt-get install -y \
+    librlottie-dev \
+    libclang1 \
+    libclang-dev \
+    llvm-dev \
+    clang \
+    make \
+    pkg-config \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
 
 FROM chef AS planner
 COPY . .
@@ -9,13 +19,12 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --target x86_64-unknown-linux-musl --recipe-path recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
-RUN cargo build --release --target x86_64-unknown-linux-musl --bin converter-server
+RUN cargo build --release --bin converter-server
 
-FROM alpine AS converter-server
+FROM debian:bookworm-slim AS converter-server
 WORKDIR /app
-RUN addgroup -S converter-server && adduser -S converter-server -G converter-server
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/converter-server /usr/local/bin/
-USER converter-server
-CMD ["/usr/local/bin/converter-server"]
+RUN apt-get update && apt-get install -y librlottie-dev && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/converter-server /bin/
+CMD ["converter-server"]
