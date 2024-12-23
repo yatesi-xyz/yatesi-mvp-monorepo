@@ -25,6 +25,9 @@ RUN cargo build --release --bin converter-server
 
 FROM debian:bookworm-slim AS converter-server
 WORKDIR /app
-RUN apt-get update && apt-get install -y librlottie-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    librlottie-dev \
+    libwebp-dev \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/converter-server /bin/
 CMD ["converter-server"]

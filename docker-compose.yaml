@@ -8,6 +8,8 @@ services:
         - linux/amd64
     container_name: converter
     restart: unless-stopped
+    ports:
+      - 9301:8080
     volumes:
       - ./converter/config.toml:/app/config.toml:ro
     deploy:
