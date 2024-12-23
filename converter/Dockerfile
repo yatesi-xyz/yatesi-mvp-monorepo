@@ -10,8 +10,7 @@ RUN apt-get update && apt-get install -y \
     clang \
     make \
     pkg-config \
-    protobuf-compiler \
-    && rm -rf /var/lib/apt/lists/*
+    protobuf-compiler
 
 FROM chef AS planner
 COPY . .
@@ -23,11 +22,10 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release --bin converter-server
 
-FROM debian:bookworm-slim AS converter-server
+FROM debian:bookworm AS converter-server
 WORKDIR /app
 RUN apt-get update && apt-get install -y \
     librlottie-dev \
-    libwebp-dev \
-    && rm -rf /var/lib/apt/lists/*
+    libwebp-dev
 COPY --from=builder /app/target/release/converter-server /bin/
 CMD ["converter-server"]
