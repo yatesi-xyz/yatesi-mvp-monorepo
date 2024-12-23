@@ -22,7 +22,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     let config: Config =
-        toml::from_str(&fs::read_to_string("config.toml").expect("Failed to read config file"))?;
+        toml::from_str(&fs::read_to_string("config.toml").expect("Failed to read config file"))
+            .expect("Failed to parse config file");
 
     let addr = format!("{}:{}", config.server.host, config.server.port).parse()?;
     let converter_service = ConverterServiceServer::new(ConverterServiceImpl::default());
