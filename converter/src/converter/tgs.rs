@@ -1,3 +1,4 @@
+use crate::converter::errors::{GzipDecompressionError, LottieParseError};
 use flate2::read::GzDecoder;
 use lottieconv::{Animation, Converter, Rgba};
 use prost::bytes::Buf;
@@ -8,28 +9,23 @@ pub struct TGSAnimation {
     lottie: Animation,
 }
 
-#[derive(Debug)]
-struct LottieLoadError {}
-
-impl std::fmt::Display for LottieLoadError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "failed to parse lottie animation")
-    }
-}
-impl Error for LottieLoadError {}
-
 impl TGSAnimation {
     pub fn load_from_tgs_bytes(bytes: Vec<u8>) -> Result<TGSAnimation, Box<dyn Error>> {
         Ok(bytes)
-            .and_then(TGSAnimation::decompress_if_gzip)
+            .and_then(|bytes| {
+                TGSAnimation::decompress_if_gzip(bytes)
+                    .map_err(|_| GzipDecompressionError {}.into())
+            })
             .and_then(|content| {
-                Animation::from_data(content, "", "").ok_or(LottieLoadError {}.into())
+                Animation::from_data(content, "", "").ok_or(LottieParseError {}.into())
             })
             .and_then(|animation| Ok(TGSAnimation { lottie: animation }))
     }
 
     pub fn export_to_gif_bytes(self) -> Result<Vec<u8>, Box<dyn Error>> {
-        let mut buffer = Vec::<u8>::new();
+        let mut buffer = Vec::with_capacity(
+            self.lottie.size().height * self.lottie.size().width * self.lottie.totalframe(),
+        );
         let _ = Converter::new(self.lottie)
             .gif(Rgba::new_alpha(0, 0, 0, true), &mut buffer)?
             .convert()?;
@@ -38,7 +34,9 @@ impl TGSAnimation {
     }
 
     pub fn export_to_webp_bytes(self) -> Result<Vec<u8>, Box<dyn Error>> {
-        let mut buffer = Vec::new();
+        let mut buffer = Vec::with_capacity(
+            self.lottie.size().height * self.lottie.size().width * self.lottie.totalframe(),
+        );
         let _ = Converter::new(self.lottie)
             .webp()?
             .convert()?
