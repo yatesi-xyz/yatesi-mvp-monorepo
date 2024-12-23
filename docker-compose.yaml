@@ -1,0 +1,20 @@
+services:
+  converter:
+    build:
+      context: converter
+      dockerfile: Dockerfile
+      target: converter-server
+    container_name: converter
+    restart: unless-stopped
+    ports:
+      - 9301:8080
+    volumes:
+      - ./converter/config.toml:/app/config.toml:ro
+    deploy:
+      resources:
+        limits:
+          memory: 200MB
+          cpus: 0.5
+        reservations:
+          cpus: 0.1
+          memory: 20MB
