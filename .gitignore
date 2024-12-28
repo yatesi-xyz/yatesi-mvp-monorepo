@@ -1,5 +1,8 @@
+.env
 .idea
 .ropeproject
 .vim
 .vscode
 .zed
+experiments
+database_data

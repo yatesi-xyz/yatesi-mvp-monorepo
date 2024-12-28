@@ -1,0 +1,14 @@
+*.rs.bk
+*.swn
+*.swo
+*.swp
+.DS_Store
+.dockerignore
+.env
+.git
+.idea
+.vscode
+.zed
+Cargo.lock
+Dockerfile
+target
