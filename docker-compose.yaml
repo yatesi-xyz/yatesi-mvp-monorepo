@@ -24,14 +24,20 @@ services:
           memory: 200MB
 
   cache:
-    image: eqalpha/keydb:alpine
+    image: eqalpha/keydb:alpine_x86_64_v6.3.3
     container_name: cache
     restart: unless-stopped
     ports:
       - 9302:6379
     volumes:
       - ./keydb.conf:/etc/keydb/keydb.conf:ro
-    command: keydb-server /etc/keydb/keydb.conf --server-threads 4
+    command: /etc/keydb/keydb.conf
+    healthcheck:
+      test: ["CMD", "keydb-cli", "ping"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 10s
     deploy:
       resources:
         reservations:
@@ -50,7 +56,13 @@ services:
     volumes:
       - ./database_data:/data
     user: ${USERID}
-    command: start --user ${DATABASE_USERNAME} --pass ${DATABASE_PASSWORD} rocksdb:/data/database.db
+    command: start --user ${DATABASE_USERNAME} --pass ${DATABASE_PASSWORD} rocksdb:/data
+    healthcheck:
+      test: ["CMD", "/surreal", "is-ready"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 10s
     deploy:
       resources:
         reservations:
@@ -71,6 +83,11 @@ services:
       - 9304:8080
     volumes:
       - ./statserver/config.toml:/app/config.toml:ro
+    depends_on:
+      cache:
+        condition: service_healthy
+      database:
+        condition: service_healthy
     deploy:
       resources:
         reservations:
