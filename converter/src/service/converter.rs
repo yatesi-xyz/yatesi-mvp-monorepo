@@ -9,10 +9,7 @@ pub struct ConverterServiceImpl {}
 
 #[tonic::async_trait]
 impl ConverterService for ConverterServiceImpl {
-    async fn convert_to_gif(
-        &self,
-        request: Request<GifRequest>,
-    ) -> Result<Response<GifResponse>, Status> {
+    async fn convert_to_gif(&self, request: Request<GifRequest>) -> Result<Response<GifResponse>, Status> {
         info!("Starting GIF conversion");
 
         match self.convert_gif_internal(request) {
@@ -27,10 +24,7 @@ impl ConverterService for ConverterServiceImpl {
         }
     }
 
-    async fn convert_to_webp(
-        &self,
-        request: Request<WebpRequest>,
-    ) -> Result<Response<WebpResponse>, Status> {
+    async fn convert_to_webp(&self, request: Request<WebpRequest>) -> Result<Response<WebpResponse>, Status> {
         info!("Starting WebP conversion");
 
         match self.convert_webp_internal(request) {

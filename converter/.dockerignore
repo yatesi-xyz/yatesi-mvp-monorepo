@@ -11,4 +11,5 @@
 .zed
 Cargo.lock
 Dockerfile
+config.toml
 target
