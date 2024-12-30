@@ -117,7 +117,27 @@ impl LiveUpdateProcessor {
     }
 
     async fn handle_stream<C: ConnectionLike + Clone>(&self, cache: C, resource: &str) -> AnyResult<()> {
-        log::debug!(target: resource, "openinig live select stream for resource");
+        loop {
+            log::info!(target: resource, "starting stream handler for resource");
+
+            let result = self.handle_stream_with_timeout(cache.clone(), resource).await;
+
+            match result {
+                Ok(_) => {
+                    log::warn!(target: resource, "stream handler completed normally, reconnecting...");
+                }
+                Err(e) => {
+                    log::error!(target: resource, "stream handler failed: {}, reconnecting...", e);
+                }
+            }
+
+            // Wait before reconnecting to avoid aggressive retry loops
+            tokio::time::sleep(StdDuration::from_secs(1)).await;
+        }
+    }
+
+    async fn handle_stream_with_timeout<C: ConnectionLike + Clone>(&self, cache: C, resource: &str) -> AnyResult<()> {
+        log::debug!(target: resource, "opening live select stream for resource");
         let database_stream = self
             .database
             .select(resource)
@@ -140,14 +160,14 @@ impl LiveUpdateProcessor {
             .select(resource)
             .into_future()
             .map(|r: Result<Vec<CountUpdate>, surrealdb::Error>| {
-                r.context(format!("getting intial value from {} resource", &resource))
+                r.context(format!("getting initial value from {} resource", &resource))
             })
             .await?
             .get(0)
             .map_or(0, |r| r.count);
-        let mut lastest_count = current_count;
+        let mut latest_count = current_count;
 
-        log::debug!("initialising cache with ground truth value");
+        log::debug!("initializing cache with ground truth value");
         let _: () = redis::cmd("set")
             .arg(&resource)
             .arg(&current_count)
@@ -156,23 +176,26 @@ impl LiveUpdateProcessor {
             .await?;
 
         let mut event_stream = stream::select(timer_stream, database_stream);
+        let mut last_activity = TokioInstant::now();
+
         log::debug!(target: resource, "consuming event stream");
-        while let Some(event) = event_stream.next().await {
+        while let Some(event) = tokio::time::timeout(StdDuration::from_millis(5000), event_stream.next()).await? {
             match event {
                 Err(err) => {
-                    log::error!(target: resource, "error encounted while consuming stream for resource: {}", err);
-                    break;
+                    log::error!(target: resource, "error encountered while consuming stream for resource: {}", err);
+                    return Err(err.into());
                 }
 
                 Ok(Event::DatabaseUpdate(update)) => {
+                    last_activity = TokioInstant::now();
                     let now = TokioInstant::now();
 
                     if update.data.count > current_count {
                         log::debug!(target: resource, "new value {} is greater than current burst counter {}, updating", &update.data.count, &current_count);
-                        current_count = update.data.count
+                        current_count = update.data.count;
                     } else if now.duration_since(last_update) >= self.burst_cfg.expire {
                         log::debug!(target: resource, "new value {} is lower than current burst counter, however, burst has expired", &update.data.count);
-                        current_count = update.data.count
+                        current_count = update.data.count;
                     } else {
                         log::debug!(target: resource, "new value {} is lower than current burst counter, burst is active, skipping update", &update.data.count);
                     }
@@ -181,7 +204,13 @@ impl LiveUpdateProcessor {
                 }
 
                 Ok(Event::TimerTick) => {
-                    if current_count == lastest_count {
+                    // Check for stream inactivity
+                    if last_activity.elapsed() > StdDuration::from_secs(5) {
+                        log::warn!(target: resource, "no activity detected for 5 seconds, triggering reconnect");
+                        return Ok(());
+                    }
+
+                    if current_count == latest_count {
                         continue;
                     }
 
@@ -198,7 +227,7 @@ impl LiveUpdateProcessor {
                     .await
                     .map_err(|_| anyhow::anyhow!("cache update timed out"))
                     .and_then(|r| r)
-                    .map(|_: ()| lastest_count = current_count);
+                    .map(|_: ()| latest_count = current_count);
                 }
             }
         }

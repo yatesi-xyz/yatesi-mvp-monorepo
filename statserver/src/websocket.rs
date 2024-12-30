@@ -114,7 +114,6 @@ impl WebsocketServer {
                 }
 
                 Ok(Event::TimerTick) | Ok(Event::NewMessage(_)) => {
-                    log::debug!(target: resource, "fetching data from cache");
                     let values = tokio::time::timeout(
                         std::time::Duration::from_millis(500),
                         redis::cmd("MGET")
@@ -127,12 +126,15 @@ impl WebsocketServer {
                             .query_async(&mut cache.clone()),
                     )
                     .await
-                    .inspect_err(|err| log::error!("failed to fetch from cache with timeout: {}", err))
-                    .unwrap_or(Ok((0, 0, 0, 0)))
-                    .inspect_err(|err| log::error!("failed to fetch from cache with error: {}", err))
-                    .unwrap_or((0, 0, 0, 0));
+                    .unwrap_or_else(|err| {
+                        log::error!(target: resource, "failed to fetch from cache with timeout: {}", err);
+                        Ok((0, 0, 0, 0))
+                    })
+                    .unwrap_or_else(|err| {
+                        log::error!(target: resource, "failed to fetch from cache with error: {}", err);
+                        (0, 0, 0, 0)
+                    });
 
-                    log::debug!(target: resource, "generating message");
                     let data = StatisticsMessage {
                         total_emoji_count: values.0,
                         total_emojipack_count: values.1,
@@ -141,7 +143,6 @@ impl WebsocketServer {
                     };
                     let message = serde_json::to_string(&data).context("serializing statistics message")?;
 
-                    log::debug!(target: resource, "sending message");
                     write_stream
                         .send(Message::text(message))
                         .map(|r| r.context("writing to output stream"))
