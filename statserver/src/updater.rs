@@ -1,21 +1,20 @@
-use crate::config::{CacheConfig, DatabaseConfig};
+use crate::config::{BurstConfig, CacheConfig, DatabaseConfig};
 use anyhow::{Context, Result as AnyResult};
-use futures::{FutureExt, StreamExt};
+use futures::{stream, FutureExt, StreamExt};
 use redis::aio::{ConnectionLike, ConnectionManager};
 use serde::Deserialize;
 use std::future::{Future, IntoFuture};
-use std::time::Duration;
 use surrealdb::{
     engine::remote::ws::{Client, Ws},
-    method::Stream,
     opt::auth::Root,
     Surreal,
 };
 use tokio::time::Instant;
 
-pub struct LiveUpdateProcessor {
+pub struct LiveUpdateProcessor<'a> {
     cache: redis::Client,
     database: Surreal<Client>,
+    burst_cfg: &'a BurstConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -23,9 +22,19 @@ struct CountUpdate {
     count: usize,
 }
 
-impl LiveUpdateProcessor {
-    pub async fn new(database_cfg: &DatabaseConfig, cache_cfg: &CacheConfig) -> AnyResult<LiveUpdateProcessor> {
+enum UpdateEvent {
+    Timer,
+    Database(surrealdb::Notification<CountUpdate>),
+}
+
+impl<'a> LiveUpdateProcessor<'a> {
+    pub async fn new(
+        database_cfg: &'a DatabaseConfig,
+        cache_cfg: &'a CacheConfig,
+        burst_cfg: &'a BurstConfig,
+    ) -> AnyResult<LiveUpdateProcessor<'a>> {
         Ok(LiveUpdateProcessor {
+            burst_cfg,
             cache: LiveUpdateProcessor::init_cache(cache_cfg).await?,
             database: LiveUpdateProcessor::init_database(database_cfg).await?,
         })
@@ -99,15 +108,23 @@ impl LiveUpdateProcessor {
 
     async fn handle_stream<C: ConnectionLike + Clone>(&self, cache: C, resource: &str) -> AnyResult<()> {
         log::debug!(target: resource, "openinig live select stream for resource");
-        let mut stream: Stream<Vec<CountUpdate>> = self
+        let database_stream = self
             .database
             .select(resource)
             .live()
             .into_future()
             .map(|r| r.context(format!("binding live select to {} resource", &resource)))
-            .await?;
+            .await?
+            .map(|r| r.map(|n| UpdateEvent::Database(n)));
+
+        log::debug!(target: resource, "launching timer event stream");
+        let timer_stream = Box::pin(stream::unfold((), |_| async {
+            tokio::time::sleep(self.burst_cfg.sync_interval).await;
+            Some((Ok(UpdateEvent::Timer), ()))
+        }));
 
         log::debug!(target: resource, "fetching initial row count from resource");
+        let mut last_update = Instant::now();
         let mut current_count = self
             .database
             .select(resource)
@@ -118,45 +135,46 @@ impl LiveUpdateProcessor {
             .await?
             .get(0)
             .map_or(0, |r| r.count);
+        let mut lastest_count = current_count;
 
-        let mut last_update = Instant::now();
-
+        let mut event_stream = stream::select(timer_stream, database_stream);
         log::debug!(target: resource, "consuming resource stream");
-        while let Some(notification) = stream.next().await {
-            match notification {
+        while let Some(event) = event_stream.next().await {
+            match event {
                 Err(err) => {
-                    log::error!(
-                        "error encounted while consuming stream for resource {}: {}",
-                        &resource,
-                        err
-                    );
+                    log::error!(target: resource, "error encounted while consuming stream for resource: {}", err);
                 }
-                Ok(update) => {
+
+                Ok(UpdateEvent::Database(update)) => {
                     let now = Instant::now();
-                    log::debug!(target: resource, "new update received");
 
                     if update.data.count > current_count {
-                        log::debug!(target: resource, "new value is greater than current in-memory cached value, updating");
+                        log::debug!(target: resource, "new value {} is greater than current burst counter {}, updating", &update.data.count, &current_count);
                         current_count = update.data.count
-                    } else if now.duration_since(last_update) >= Duration::from_micros(2000) {
-                        log::debug!(target: resource, "new value is lower than current in-memory cached value, however more then 2000ms have passed, updating");
+                    } else if now.duration_since(last_update) >= self.burst_cfg.expire {
+                        log::debug!(target: resource, "new value {} is lower than current burst counter, however, burst has expired", &update.data.count);
                         current_count = update.data.count
                     } else {
-                        log::debug!(target: resource, "new value is lower than current in-memory cached value, cache has not expiried yet, skipping");
-                    }
-
-                    if now.duration_since(last_update) > Duration::from_millis(100) {
-                        log::info!(target: resource, "updating remote cache with value: {}", &current_count);
-                        let _: AnyResult<()> = redis::cmd("set")
-                            .arg(&resource)
-                            .arg(&current_count)
-                            .query_async(&mut cache.clone())
-                            .into_future()
-                            .map(|r| r.context("updating cache value"))
-                            .await;
+                        log::debug!(target: resource, "new value {} is lower than current burst counter, burst is active, skipping update", &update.data.count);
                     }
 
                     last_update = now;
+                }
+
+                Ok(UpdateEvent::Timer) => {
+                    if current_count == lastest_count {
+                        continue;
+                    }
+
+                    log::info!(target: resource, "updating remote cache with value: {}", &current_count);
+                    let _ = redis::cmd("set")
+                        .arg(&resource)
+                        .arg(&current_count)
+                        .query_async(&mut cache.clone())
+                        .into_future()
+                        .map(|r| r.context("updating cache value"))
+                        .await
+                        .map(|_: ()| lastest_count = current_count);
                 }
             }
         }

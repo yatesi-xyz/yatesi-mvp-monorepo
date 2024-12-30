@@ -19,7 +19,7 @@ async fn main() -> AnyResult<()> {
     pretty_env_logger::init();
 
     log::debug!("initialising live updates processor");
-    let live_updates: LiveUpdateProcessor = LiveUpdateProcessor::new(&config.database, &config.cache)
+    let live_updates: LiveUpdateProcessor = LiveUpdateProcessor::new(&config.database, &config.cache, &config.burst)
         .map(|r| r.context("initialising live updates processor"))
         .await?;
 

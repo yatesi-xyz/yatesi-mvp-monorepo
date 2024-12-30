@@ -1,3 +1,5 @@
+use tokio::time::Duration;
+
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -6,6 +8,7 @@ pub struct Config {
     pub database: DatabaseConfig,
     pub cache: CacheConfig,
     pub server: ServerConfig,
+    pub burst: BurstConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -26,4 +29,13 @@ pub struct CacheConfig {
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BurstConfig {
+    #[serde(with = "humantime_serde")]
+    pub sync_interval: Duration,
+
+    #[serde(with = "humantime_serde")]
+    pub expire: Duration,
 }
