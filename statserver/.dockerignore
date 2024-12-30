@@ -7,8 +7,10 @@
 .env
 .git
 .idea
+.rustfmt.toml
 .vscode
 .zed
 Cargo.lock
 Dockerfile
+config.toml
 target
