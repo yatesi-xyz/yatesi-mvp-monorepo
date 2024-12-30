@@ -95,6 +95,18 @@ impl WebsocketServer {
                     break;
                 }
 
+                Ok(Event::NewMessage(Message::Ping(b))) => {
+                    write_stream
+                        .send(Message::Pong(b))
+                        .map(|r| r.context("ping-pong websocket reply"))
+                        .await?;
+                }
+
+                Ok(Event::NewMessage(Message::Close(_))) => {
+                    log::info!(target: resource, "recevied closing message");
+                    break;
+                }
+
                 Ok(Event::TimerTick) | Ok(Event::NewMessage(_)) => {
                     log::debug!(target: resource, "fetching data from cache");
                     let values: (usize, usize, usize, usize) = redis::cmd("MGET")
