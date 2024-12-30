@@ -1,7 +1,7 @@
 use crate::config::{CacheConfig, ServerConfig};
 use anyhow::{Context, Result as AnyResult};
 use futures::{stream, FutureExt, SinkExt, StreamExt};
-use redis::aio::ConnectionLike;
+use redis::aio::{ConnectionLike, ConnectionManagerConfig};
 use serde::Serialize;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::Message;
@@ -43,7 +43,13 @@ impl WebsocketServer {
         log::debug!("creating connection manager for cache");
         let mux_connection = self
             .cache
-            .get_connection_manager()
+            .get_connection_manager_with_config(
+                ConnectionManagerConfig::new()
+                    .set_max_delay(1000)
+                    .set_number_of_retries(5)
+                    .set_response_timeout(std::time::Duration::from_millis(500))
+                    .set_connection_timeout(std::time::Duration::from_millis(200)),
+            )
             .map(|r| r.context("openning new connection to keydb"))
             .await?;
 
@@ -109,16 +115,22 @@ impl WebsocketServer {
 
                 Ok(Event::TimerTick) | Ok(Event::NewMessage(_)) => {
                     log::debug!(target: resource, "fetching data from cache");
-                    let values: (usize, usize, usize, usize) = redis::cmd("MGET")
-                        .arg(&[
-                            "total_emoji_count",
-                            "total_emojipack_count",
-                            "indexed_emoji_count",
-                            "indexed_emojipack_count",
-                        ])
-                        .query_async(&mut cache.clone())
-                        .map(|r| r.context("fetching data from cache"))
-                        .await?;
+                    let values = tokio::time::timeout(
+                        std::time::Duration::from_millis(500),
+                        redis::cmd("MGET")
+                            .arg(&[
+                                "total_emoji_count",
+                                "total_emojipack_count",
+                                "indexed_emoji_count",
+                                "indexed_emojipack_count",
+                            ])
+                            .query_async(&mut cache.clone()),
+                    )
+                    .await
+                    .inspect_err(|err| log::error!("failed to fetch from cache with timeout: {}", err))
+                    .unwrap_or(Ok((0, 0, 0, 0)))
+                    .inspect_err(|err| log::error!("failed to fetch from cache with error: {}", err))
+                    .unwrap_or((0, 0, 0, 0));
 
                     log::debug!(target: resource, "generating message");
                     let data = StatisticsMessage {
