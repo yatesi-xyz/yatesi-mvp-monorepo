@@ -1,56 +1,26 @@
 mod config;
+mod updater;
 
+use anyhow::{Context, Result as AnyResult};
 use config::Config;
-use futures::StreamExt;
-use serde::Deserialize;
-use std::error::Error;
-use std::sync::LazyLock;
-use surrealdb::engine::remote::ws::{Client, Ws};
-use surrealdb::method::Stream;
-use surrealdb::opt::auth::Root;
-use surrealdb::Surreal;
+use futures::FutureExt;
+use updater::LiveUpdateProcessor;
 
-static DB: LazyLock<Surreal<Client>> = LazyLock::new(Surreal::init);
+#[tokio::main(flavor = "multi_thread")]
+async fn main() -> AnyResult<()> {
+    let config: Config = std::fs::read_to_string("config.toml")
+        .context("reading config file")
+        .and_then(|s| toml::from_str(&s).map_err(|e| e.into()))
+        .context("parsing config file")?;
 
-#[derive(Deserialize, Debug)]
-struct EmojisCount {
-    count: usize,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let config: Config = toml::from_str(
-        &std::fs::read_to_string("config.toml").expect("failed to read config file"),
-    )
-    .expect("failed to parse config file");
-
-    DB.connect::<Ws>(config.database.dsn).await?;
-    DB.signin(Root {
-        username: &config.database.username,
-        password: &config.database.password,
-    })
-    .await?;
-
-    DB.use_ns(&config.database.namespace)
-        .use_db(&config.database.database)
+    let live_updates: LiveUpdateProcessor = LiveUpdateProcessor::new(&config.database, &config.cache)
+        .map(|r| r.context("initialising batch processor"))
         .await?;
 
-    DB.query(
-        r#"
-        DEFINE TABLE IF NOT EXISTS emojis_count_view TYPE NORMAL AS
-        SELECT count() FROM emojis GROUP ALL;
-        "#,
-    )
-    .await?;
+    live_updates
+        .listen()
+        .map(|r| r.context("listening and batching updates"))
+        .await?;
 
-    let mut stream: Stream<Vec<EmojisCount>> = DB.select("emojis_count_view").live().await?;
-
-    while let Some(result) = stream.next().await {
-        match result {
-            Ok(n) => println!("new count: {}", n.data.count),
-            Err(_) => break,
-        }
-    }
-
-    Ok(())
+    Ok(tokio::signal::ctrl_c().await?)
 }
