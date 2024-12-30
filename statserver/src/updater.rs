@@ -45,14 +45,17 @@ impl LiveUpdateProcessor {
     }
 
     async fn init_database(database_cfg: &DatabaseConfig) -> AnyResult<Surreal<Client>> {
+        log::debug!("creating database client");
         let database = Surreal::<Client>::init();
 
+        log::debug!("connecting to websocket");
         database
             .connect::<Ws>(&database_cfg.dsn)
             .into_future()
             .map(|r| r.context("connecting to surrealdb on specified address"))
             .await?;
 
+        log::debug!("authorizing with root username and password");
         database
             .signin(Root {
                 username: &database_cfg.username,
@@ -62,6 +65,7 @@ impl LiveUpdateProcessor {
             .map(|r| r.context("authorizing in surrealdb with specified credentials"))
             .await?;
 
+        log::debug!("switching to specified namespace and database");
         database
             .use_ns(&database_cfg.namespace)
             .use_db(&database_cfg.database)
@@ -69,26 +73,32 @@ impl LiveUpdateProcessor {
             .map(|r| r.context("switching to specified namespace and database"))
             .await?;
 
+        log::info!("database is OK");
         Ok(database)
     }
 
     async fn init_cache(cache_cfg: &CacheConfig) -> AnyResult<redis::Client> {
+        log::debug!("creating cache client");
         let cache = redis::Client::open(cache_cfg.dsn.as_str())?;
 
+        log::debug!("opening new cache connection");
         let mut connection = cache
             .get_multiplexed_tokio_connection()
-            .map(|r| r.context("openning new connection to redis"))
+            .map(|r| r.context("opening new connection to redis"))
             .await?;
 
+        log::debug!("executing ping command");
         let _: () = redis::cmd("ping")
             .query_async(&mut connection)
             .map(|r| r.context("executing ping command to verify connection"))
             .await?;
 
+        log::info!("cache is OK");
         Ok(cache)
     }
 
     async fn handle_stream<C: ConnectionLike + Clone>(&self, cache: C, resource: &str) -> AnyResult<()> {
+        log::debug!(target: resource, "openinig live select stream for resource");
         let mut stream: Stream<Vec<CountUpdate>> = self
             .database
             .select(resource)
@@ -97,6 +107,7 @@ impl LiveUpdateProcessor {
             .map(|r| r.context(format!("binding live select to {} resource", &resource)))
             .await?;
 
+        log::debug!(target: resource, "fetching initial row count from resource");
         let mut current_count = self
             .database
             .select(resource)
@@ -110,20 +121,35 @@ impl LiveUpdateProcessor {
 
         let mut last_update = Instant::now();
 
+        log::debug!(target: resource, "consuming resource stream");
         while let Some(notification) = stream.next().await {
             match notification {
-                Err(_) => continue,
+                Err(err) => {
+                    log::error!(
+                        "error encounted while consuming stream for resource {}: {}",
+                        &resource,
+                        err
+                    );
+                }
                 Ok(update) => {
+                    let now = Instant::now();
+                    log::debug!(target: resource, "new update received");
+
                     if update.data.count > current_count {
+                        log::debug!(target: resource, "new value is greater than current in-memory cached value, updating");
                         current_count = update.data.count
+                    } else if now.duration_since(last_update) >= Duration::from_micros(2000) {
+                        log::debug!(target: resource, "new value is lower than current in-memory cached value, however more then 2000ms have passed, updating");
+                        current_count = update.data.count
+                    } else {
+                        log::debug!(target: resource, "new value is lower than current in-memory cached value, cache has not expiried yet, skipping");
                     }
 
-                    let now = Instant::now();
-
                     if now.duration_since(last_update) > Duration::from_millis(100) {
+                        log::info!(target: resource, "updating remote cache with value: {}", &current_count);
                         let _: AnyResult<()> = redis::cmd("set")
                             .arg(&resource)
-                            .arg(current_count)
+                            .arg(&current_count)
                             .query_async(&mut cache.clone())
                             .into_future()
                             .map(|r| r.context("updating cache value"))

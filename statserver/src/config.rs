@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    pub debug: bool,
     pub database: DatabaseConfig,
     pub cache: CacheConfig,
     pub server: ServerConfig,
