@@ -1,16 +1,17 @@
 use crate::config::{CacheConfig, DatabaseConfig};
 use anyhow::{Context, Result as AnyResult};
-use futures::task::Poll;
-use futures::{stream, FutureExt, StreamExt};
+use futures::{FutureExt, StreamExt};
 use redis::aio::{ConnectionLike, ConnectionManager};
 use serde::Deserialize;
 use std::future::{Future, IntoFuture};
+use std::time::Duration;
 use surrealdb::{
     engine::remote::ws::{Client, Ws},
     method::Stream,
     opt::auth::Root,
     Surreal,
 };
+use tokio::time::Instant;
 
 pub struct LiveUpdateProcessor {
     cache: redis::Client,
@@ -96,17 +97,40 @@ impl LiveUpdateProcessor {
             .map(|r| r.context(format!("binding live select to {} resource", &resource)))
             .await?;
 
+        let mut current_count = self
+            .database
+            .select(resource)
+            .into_future()
+            .map(|r: Result<Vec<CountUpdate>, surrealdb::Error>| {
+                r.context(format!("getting intial value from {} resource", &resource))
+            })
+            .await?
+            .get(0)
+            .map_or(0, |r| r.count);
+
+        let mut last_update = Instant::now();
+
         while let Some(notification) = stream.next().await {
             match notification {
                 Err(_) => continue,
                 Ok(update) => {
-                    let _: AnyResult<()> = redis::cmd("set")
-                        .arg(&resource)
-                        .arg(update.data.count)
-                        .query_async(&mut cache.clone())
-                        .into_future()
-                        .map(|r| r.context("updating cache value"))
-                        .await;
+                    if update.data.count > current_count {
+                        current_count = update.data.count
+                    }
+
+                    let now = Instant::now();
+
+                    if now.duration_since(last_update) > Duration::from_millis(100) {
+                        let _: AnyResult<()> = redis::cmd("set")
+                            .arg(&resource)
+                            .arg(current_count)
+                            .query_async(&mut cache.clone())
+                            .into_future()
+                            .map(|r| r.context("updating cache value"))
+                            .await;
+                    }
+
+                    last_update = now;
                 }
             }
         }
