@@ -1,0 +1,11 @@
+# application
+config.toml
+
+# editors
+.zed
+.vscode
+.idea
+.ropeproject
+
+# project
+/target

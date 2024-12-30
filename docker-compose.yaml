@@ -1,3 +1,7 @@
+volumes:
+  database_volume:
+    driver: local
+
 services:
   converter:
     build:
@@ -12,9 +16,83 @@ services:
       - ./converter/config.toml:/app/config.toml:ro
     deploy:
       resources:
-        limits:
-          memory: 200MB
-          cpus: 0.5
         reservations:
           cpus: 0.1
           memory: 20MB
+        limits:
+          cpus: 0.5
+          memory: 200MB
+
+  cache:
+    image: eqalpha/keydb:alpine_x86_64_v6.3.3
+    container_name: cache
+    restart: unless-stopped
+    ports:
+      - 9302:6379
+    volumes:
+      - ./keydb.conf:/etc/keydb/keydb.conf:ro
+    command: /etc/keydb/keydb.conf
+    healthcheck:
+      test: ["CMD", "keydb-cli", "ping"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        reservations:
+          cpus: 0.01
+          memory: 20MB
+        limits:
+          cpus: 0.1
+          memory: 150MB
+
+  database:
+    image: surrealdb/surrealdb:v2.1
+    container_name: database
+    restart: unless-stopped
+    ports:
+      - 9303:8000
+    volumes:
+      - ./database_data:/data
+    user: ${USERID}
+    command: start --user ${DATABASE_USERNAME} --pass ${DATABASE_PASSWORD} rocksdb:/data
+    healthcheck:
+      test: ["CMD", "/surreal", "is-ready"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        reservations:
+          cpus: 0.1
+          memory: 20MB
+        limits:
+          cpus: 0.5
+          memory: 200MB
+
+  statserver:
+    build:
+      context: statserver
+      dockerfile: Dockerfile
+      target: statserver
+    container_name: statserver
+    restart: unless-stopped
+    ports:
+      - 9304:8080
+    volumes:
+      - ./statserver/config.toml:/app/config.toml:ro
+    depends_on:
+      cache:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          cpus: 0.1
+          memory: 20MB
+        limits:
+          cpus: 0.5
+          memory: 200MB
