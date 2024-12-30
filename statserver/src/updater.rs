@@ -1,15 +1,15 @@
 use crate::config::{BurstConfig, CacheConfig, DatabaseConfig};
 use anyhow::{Context, Result as AnyResult};
 use futures::{stream, FutureExt, StreamExt};
-use redis::aio::ConnectionLike;
+use redis::aio::{ConnectionLike, ConnectionManagerConfig};
 use serde::Deserialize;
-use std::future::IntoFuture;
+use std::{future::IntoFuture, time::Duration as StdDuration};
 use surrealdb::{
     engine::remote::ws::{Client, Ws},
     opt::auth::Root,
     Surreal,
 };
-use tokio::time::Instant;
+use tokio::time::Instant as TokioInstant;
 
 pub struct LiveUpdateProcessor {
     cache: redis::Client,
@@ -22,9 +22,9 @@ struct CountUpdate {
     count: usize,
 }
 
-enum UpdateEvent {
+enum Event {
     TimerTick,
-    Database(surrealdb::Notification<CountUpdate>),
+    DatabaseUpdate(surrealdb::Notification<CountUpdate>),
 }
 
 impl LiveUpdateProcessor {
@@ -43,7 +43,13 @@ impl LiveUpdateProcessor {
     pub async fn listen(&self) -> AnyResult<()> {
         let mux_connection = self
             .cache
-            .get_connection_manager()
+            .get_connection_manager_with_config(
+                ConnectionManagerConfig::new()
+                    .set_max_delay(1000)
+                    .set_number_of_retries(5)
+                    .set_connection_timeout(StdDuration::from_millis(200))
+                    .set_response_timeout(StdDuration::from_millis(1000)),
+            )
             .map(|r| r.context("openning new connection to keydb"))
             .await?;
 
@@ -119,16 +125,16 @@ impl LiveUpdateProcessor {
             .into_future()
             .map(|r| r.context(format!("binding live select to {} resource", &resource)))
             .await?
-            .map(|r| r.map(|n| UpdateEvent::Database(n)));
+            .map(|r| r.map(|n| Event::DatabaseUpdate(n)));
 
         log::debug!(target: resource, "launching timer event stream");
         let timer_stream = Box::pin(stream::unfold((), |_| async {
             tokio::time::sleep(self.burst_cfg.sync_interval).await;
-            Some((Ok(UpdateEvent::TimerTick), ()))
+            Some((Ok(Event::TimerTick), ()))
         }));
 
         log::debug!(target: resource, "fetching initial row count from resource");
-        let mut last_update = Instant::now();
+        let mut last_update = TokioInstant::now();
         let mut current_count = self
             .database
             .select(resource)
@@ -141,17 +147,25 @@ impl LiveUpdateProcessor {
             .map_or(0, |r| r.count);
         let mut lastest_count = current_count;
 
+        log::debug!("initialising cache with ground truth value");
+        let _: () = redis::cmd("set")
+            .arg(&resource)
+            .arg(&current_count)
+            .query_async(&mut cache.clone())
+            .map(|r| r.context("setting default cache value"))
+            .await?;
+
         let mut event_stream = stream::select(timer_stream, database_stream);
         log::debug!(target: resource, "consuming event stream");
         while let Some(event) = event_stream.next().await {
             match event {
                 Err(err) => {
                     log::error!(target: resource, "error encounted while consuming stream for resource: {}", err);
-                    return Err(err.into());
+                    break;
                 }
 
-                Ok(UpdateEvent::Database(update)) => {
-                    let now = Instant::now();
+                Ok(Event::DatabaseUpdate(update)) => {
+                    let now = TokioInstant::now();
 
                     if update.data.count > current_count {
                         log::debug!(target: resource, "new value {} is greater than current burst counter {}, updating", &update.data.count, &current_count);
@@ -166,20 +180,25 @@ impl LiveUpdateProcessor {
                     last_update = now;
                 }
 
-                Ok(UpdateEvent::TimerTick) => {
+                Ok(Event::TimerTick) => {
                     if current_count == lastest_count {
                         continue;
                     }
 
                     log::info!(target: resource, "updating remote cache with value: {}", &current_count);
-                    let _ = redis::cmd("set")
-                        .arg(&resource)
-                        .arg(&current_count)
-                        .query_async(&mut cache.clone())
-                        .into_future()
-                        .map(|r| r.context("updating cache value"))
-                        .await
-                        .map(|_: ()| lastest_count = current_count);
+                    let _ = tokio::time::timeout(
+                        StdDuration::from_millis(500),
+                        redis::cmd("set")
+                            .arg(&resource)
+                            .arg(&current_count)
+                            .query_async(&mut cache.clone())
+                            .into_future()
+                            .map(|r| r.context("updating cache value")),
+                    )
+                    .await
+                    .map_err(|_| anyhow::anyhow!("cache update timed out"))
+                    .and_then(|r| r)
+                    .map(|_: ()| lastest_count = current_count);
                 }
             }
         }
