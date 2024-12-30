@@ -2,7 +2,7 @@ use tokio::time::Duration;
 
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub debug: bool,
     pub database: DatabaseConfig,
@@ -11,7 +11,7 @@ pub struct Config {
     pub burst: BurstConfig,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct DatabaseConfig {
     pub dsn: String,
     pub username: String,
@@ -20,18 +20,18 @@ pub struct DatabaseConfig {
     pub database: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CacheConfig {
     pub dsn: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct BurstConfig {
     #[serde(with = "humantime_serde")]
     pub sync_interval: Duration,

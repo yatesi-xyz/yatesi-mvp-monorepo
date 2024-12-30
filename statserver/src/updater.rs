@@ -1,9 +1,9 @@
 use crate::config::{BurstConfig, CacheConfig, DatabaseConfig};
 use anyhow::{Context, Result as AnyResult};
 use futures::{stream, FutureExt, StreamExt};
-use redis::aio::{ConnectionLike, ConnectionManager};
+use redis::aio::ConnectionLike;
 use serde::Deserialize;
-use std::future::{Future, IntoFuture};
+use std::future::IntoFuture;
 use surrealdb::{
     engine::remote::ws::{Client, Ws},
     opt::auth::Root,
@@ -11,10 +11,10 @@ use surrealdb::{
 };
 use tokio::time::Instant;
 
-pub struct LiveUpdateProcessor<'a> {
+pub struct LiveUpdateProcessor {
     cache: redis::Client,
     database: Surreal<Client>,
-    burst_cfg: &'a BurstConfig,
+    burst_cfg: BurstConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -23,16 +23,16 @@ struct CountUpdate {
 }
 
 enum UpdateEvent {
-    Timer,
+    TimerTick,
     Database(surrealdb::Notification<CountUpdate>),
 }
 
-impl<'a> LiveUpdateProcessor<'a> {
+impl LiveUpdateProcessor {
     pub async fn new(
-        database_cfg: &'a DatabaseConfig,
-        cache_cfg: &'a CacheConfig,
-        burst_cfg: &'a BurstConfig,
-    ) -> AnyResult<LiveUpdateProcessor<'a>> {
+        database_cfg: DatabaseConfig,
+        cache_cfg: CacheConfig,
+        burst_cfg: BurstConfig,
+    ) -> AnyResult<LiveUpdateProcessor> {
         Ok(LiveUpdateProcessor {
             burst_cfg,
             cache: LiveUpdateProcessor::init_cache(cache_cfg).await?,
@@ -41,19 +41,23 @@ impl<'a> LiveUpdateProcessor<'a> {
     }
 
     pub async fn listen(&self) -> AnyResult<()> {
-        let mux_connection = self.get_cache_connection().await?;
+        let mux_connection = self
+            .cache
+            .get_connection_manager()
+            .map(|r| r.context("openning new connection to keydb"))
+            .await?;
 
-        let _results = tokio::join!(
+        let results = tokio::join!(
             self.handle_stream(mux_connection.clone(), "total_emoji_count"),
             self.handle_stream(mux_connection.clone(), "total_emojipack_count"),
             self.handle_stream(mux_connection.clone(), "indexed_emoji_count"),
             self.handle_stream(mux_connection.clone(), "indexed_emojipack_count"),
         );
 
-        Ok(())
+        (results.0).and(results.1).and(results.2).and(results.3)
     }
 
-    async fn init_database(database_cfg: &DatabaseConfig) -> AnyResult<Surreal<Client>> {
+    async fn init_database(database_cfg: DatabaseConfig) -> AnyResult<Surreal<Client>> {
         log::debug!("creating database client");
         let database = Surreal::<Client>::init();
 
@@ -86,7 +90,7 @@ impl<'a> LiveUpdateProcessor<'a> {
         Ok(database)
     }
 
-    async fn init_cache(cache_cfg: &CacheConfig) -> AnyResult<redis::Client> {
+    async fn init_cache(cache_cfg: CacheConfig) -> AnyResult<redis::Client> {
         log::debug!("creating cache client");
         let cache = redis::Client::open(cache_cfg.dsn.as_str())?;
 
@@ -120,7 +124,7 @@ impl<'a> LiveUpdateProcessor<'a> {
         log::debug!(target: resource, "launching timer event stream");
         let timer_stream = Box::pin(stream::unfold((), |_| async {
             tokio::time::sleep(self.burst_cfg.sync_interval).await;
-            Some((Ok(UpdateEvent::Timer), ()))
+            Some((Ok(UpdateEvent::TimerTick), ()))
         }));
 
         log::debug!(target: resource, "fetching initial row count from resource");
@@ -138,11 +142,12 @@ impl<'a> LiveUpdateProcessor<'a> {
         let mut lastest_count = current_count;
 
         let mut event_stream = stream::select(timer_stream, database_stream);
-        log::debug!(target: resource, "consuming resource stream");
+        log::debug!(target: resource, "consuming event stream");
         while let Some(event) = event_stream.next().await {
             match event {
                 Err(err) => {
                     log::error!(target: resource, "error encounted while consuming stream for resource: {}", err);
+                    return Err(err.into());
                 }
 
                 Ok(UpdateEvent::Database(update)) => {
@@ -161,7 +166,7 @@ impl<'a> LiveUpdateProcessor<'a> {
                     last_update = now;
                 }
 
-                Ok(UpdateEvent::Timer) => {
+                Ok(UpdateEvent::TimerTick) => {
                     if current_count == lastest_count {
                         continue;
                     }
@@ -180,11 +185,5 @@ impl<'a> LiveUpdateProcessor<'a> {
         }
 
         Ok(())
-    }
-
-    fn get_cache_connection(&self) -> impl Future<Output = AnyResult<ConnectionManager>> + '_ {
-        self.cache
-            .get_connection_manager()
-            .map(|r| r.context("openning new connection to keydb"))
     }
 }

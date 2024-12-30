@@ -3240,8 +3240,10 @@ dependencies = [
  "pretty_env_logger",
  "redis",
  "serde",
+ "serde_json",
  "surrealdb",
  "tokio",
+ "tokio-tungstenite 0.26.1",
  "toml",
 ]
 
@@ -3347,7 +3349,7 @@ dependencies = [
  "surrealdb-core",
  "thiserror 1.0.69",
  "tokio",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.23.1",
  "tokio-util",
  "tracing",
  "trice",
@@ -3697,8 +3699,20 @@ dependencies = [
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
- "tungstenite",
+ "tungstenite 0.23.0",
  "webpki-roots",
+]
+
+[[package]]
+name = "tokio-tungstenite"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be4bf6fecd69fcdede0ec680aaf474cdab988f9de6bc73d3758f0160e3b7025a"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite 0.26.1",
 ]
 
 [[package]]
@@ -3842,6 +3856,24 @@ dependencies = [
  "sha1",
  "thiserror 1.0.69",
  "url",
+ "utf-8",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413083a99c579593656008130e29255e54dcaae495be556cc26888f211648c24"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "rand",
+ "sha1",
+ "thiserror 2.0.9",
  "utf-8",
 ]
 

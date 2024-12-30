@@ -1,11 +1,13 @@
 mod config;
 mod updater;
+mod websocket;
 
 use anyhow::{Context, Result as AnyResult};
 use config::Config;
 use futures::FutureExt;
 
 use updater::LiveUpdateProcessor;
+use websocket::WebsocketServer;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> AnyResult<()> {
@@ -19,15 +21,32 @@ async fn main() -> AnyResult<()> {
     pretty_env_logger::init();
 
     log::debug!("initialising live updates processor");
-    let live_updates: LiveUpdateProcessor = LiveUpdateProcessor::new(&config.database, &config.cache, &config.burst)
+    let live_updates = LiveUpdateProcessor::new(config.database.clone(), config.cache.clone(), config.burst.clone())
         .map(|r| r.context("initialising live updates processor"))
         .await?;
 
-    log::info!("listening for live updates");
-    live_updates
-        .listen()
-        .map(|r| r.context("listening and batching updates"))
+    log::debug!("initialising websocket server");
+    let websocket_server = WebsocketServer::new(config.server.clone(), config.cache.clone())
+        .map(|r| r.context("initialising websocker server"))
         .await?;
 
-    Ok(())
+    log::info!("listening for live updates");
+    let updates_task = tokio::spawn(async move {
+        live_updates
+            .listen()
+            .map(|r| r.context("listening and batching updates"))
+            .await
+    });
+
+    log::info!("serving websocker connections");
+    let websocket_task = tokio::spawn(async move {
+        websocket_server
+            .listen()
+            .map(|r| r.context("listening and serving websockers"))
+            .await
+    });
+
+    let results = tokio::join!(updates_task, websocket_task);
+
+    (results.0.expect("failed to join task")).and(results.1.expect("failed to join task"))
 }
