@@ -1,5 +1,6 @@
 mod config;
 mod updater;
+mod updater2;
 mod websocket;
 
 use anyhow::{Context, Result as AnyResult};

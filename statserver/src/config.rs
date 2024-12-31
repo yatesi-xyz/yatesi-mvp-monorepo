@@ -23,6 +23,17 @@ pub struct DatabaseConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CacheConfig {
     pub dsn: String,
+    #[serde(with = "humantime_serde")]
+    pub sync_interval: Duration,
+    #[serde(with = "humantime_serde")]
+    pub connection_timeout: Duration,
+    #[serde(with = "humantime_serde")]
+    pub response_timeout: Duration,
+    pub number_of_retries: usize,
+    #[serde(with = "humantime_serde")]
+    pub max_delay_between_retries: Duration,
+    #[serde(with = "humantime_serde")]
+    pub delay_exponent_base: Duration,
 }
 
 #[derive(Debug, Clone, Deserialize)]
