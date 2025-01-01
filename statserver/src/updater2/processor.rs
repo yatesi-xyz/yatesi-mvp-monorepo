@@ -3,7 +3,7 @@ use thiserror::Error as ThisError;
 
 use crate::{
     config::{CacheConfig, DatabaseConfig},
-    updater2::{cache::CacheManager, database::DatabaseManager, statistics::TotalEmojiCount},
+    updater2::{cache::CacheManager, database::DatabaseManager},
 };
 
 use super::{cache, database, statistics::Statistics};
@@ -50,11 +50,32 @@ impl LiveUpdateProcessor {
     }
 
     async fn load_statistics(self: Self) -> Result<Statistics, ProcessorError> {
+        // fetch values from database in parallel
+        let values = tokio::try_join!(
+            tokio::spawn({
+                let db = self.database.clone();
+                async move { db.get_statistic().map_err(ProcessorError::Database).await }
+            }),
+            tokio::spawn({
+                let db = self.database.clone();
+                async move { db.get_statistic().map_err(ProcessorError::Database).await }
+            }),
+            tokio::spawn({
+                let db = self.database.clone();
+                async move { db.get_statistic().map_err(ProcessorError::Database).await }
+            }),
+            tokio::spawn({
+                let db = self.database.clone();
+                async move { db.get_statistic().map_err(ProcessorError::Database).await }
+            }),
+        )
+        .map_err(ProcessorError::AsyncJoin)?;
+
         Ok(Statistics {
-            total_emoji_count: self.database.get_statistic().map_err(ProcessorError::Database).await?,
-            total_emojipack_count: self.database.get_statistic().map_err(ProcessorError::Database).await?,
-            indexed_emoji_count: self.database.get_statistic().map_err(ProcessorError::Database).await?,
-            indexed_emojipack_count: self.database.get_statistic().map_err(ProcessorError::Database).await?,
+            total_emoji_count: values.0?,
+            total_emojipack_count: values.1?,
+            indexed_emoji_count: values.2?,
+            indexed_emojipack_count: values.3?,
         })
     }
 }
