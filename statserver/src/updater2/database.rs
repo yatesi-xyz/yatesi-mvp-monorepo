@@ -1,7 +1,7 @@
 use std::future::IntoFuture;
 
 use futures::TryFutureExt;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use surrealdb::{
     engine::remote::ws::{Client, Ws},
     opt::auth::Root,
@@ -10,6 +10,8 @@ use surrealdb::{
 use thiserror::Error as ThisError;
 
 use crate::config::DatabaseConfig;
+
+use super::statistics::Statistic;
 
 #[derive(ThisError, Debug)]
 pub enum DatabaseError {
@@ -29,6 +31,7 @@ pub enum DatabaseError {
     NoResponse,
 }
 
+#[derive(Debug, Clone)]
 pub struct DatabaseManager {
     config: DatabaseConfig,
     client: Surreal<Client>,
@@ -74,14 +77,21 @@ impl DatabaseManager {
         Ok(())
     }
 
-    pub async fn get_resource_value(&self, resource: &str) -> Result<usize, DatabaseError> {
+    pub async fn get_statistic<S, T>(&self) -> Result<S, DatabaseError>
+    where
+        S: Statistic<T>,
+        T: DeserializeOwned,
+    {
         self.client
-            .select(resource)
+            .query(r#"(SELECT $field FROM $source)[0].$field"#)
+            .bind(("field", S::FIELD_NAME))
+            .bind(("source", S::SOURCE_TABLE))
             .into_future()
             .map_err(DatabaseError::Command)
             .await?
-            .get(0)
-            .map(|d: &ResourceCount| d.count)
+            .take::<Option<T>>(0)
+            .map_err(DatabaseError::Command)?
+            .map(S::from)
             .ok_or(DatabaseError::NoResponse)
     }
 }

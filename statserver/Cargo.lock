@@ -3234,6 +3234,7 @@ name = "statserver"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "futures",
  "humantime-serde",
  "log",

@@ -3,10 +3,10 @@ use thiserror::Error as ThisError;
 
 use crate::{
     config::{CacheConfig, DatabaseConfig},
-    updater2::{cache::CacheManager, database::DatabaseManager},
+    updater2::{cache::CacheManager, database::DatabaseManager, statistics::TotalEmojiCount},
 };
 
-use super::{cache, database};
+use super::{cache, database, statistics::Statistics};
 
 #[derive(ThisError, Debug)]
 pub enum ProcessorError {
@@ -42,9 +42,19 @@ impl LiveUpdateProcessor {
         })
     }
 
-    pub async fn serve(&self) -> Result<(), ProcessorError> {
-        todo!("implement service");
+    pub async fn serve(self: Self) -> Result<(), ProcessorError> {
+        let stats = self.load_statistics().await?;
+        dbg!(stats);
 
         Ok(())
+    }
+
+    async fn load_statistics(self: Self) -> Result<Statistics, ProcessorError> {
+        Ok(Statistics {
+            total_emoji_count: self.database.get_statistic().map_err(ProcessorError::Database).await?,
+            total_emojipack_count: self.database.get_statistic().map_err(ProcessorError::Database).await?,
+            indexed_emoji_count: self.database.get_statistic().map_err(ProcessorError::Database).await?,
+            indexed_emojipack_count: self.database.get_statistic().map_err(ProcessorError::Database).await?,
+        })
     }
 }

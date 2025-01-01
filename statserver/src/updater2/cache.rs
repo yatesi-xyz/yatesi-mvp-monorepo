@@ -13,6 +13,7 @@ pub enum CacheError {
     Command(redis::RedisError),
 }
 
+#[derive(Clone)]
 pub struct CacheManager {
     pool: ConnectionManager,
 }

@@ -1,3 +1,4 @@
+use async_stream::stream;
 use futures::Stream;
 use std::time::Duration;
 
@@ -9,10 +10,9 @@ pub enum StreamEvent {
     CacheTimeout,
 }
 
-pub struct StreamManager {}
-
-impl StreamManager {
-    pub fn cache_interval(resource: String, inverval: Duration) -> Stream {
-        todo!("");
-    }
+pub fn cache_event(resource: String, interval: Duration) -> impl Stream<Item = StreamEvent> {
+    stream! { loop {
+        tokio::time::sleep(interval).await;
+        yield StreamEvent::Cache { resource: resource.clone() };
+    } }
 }
