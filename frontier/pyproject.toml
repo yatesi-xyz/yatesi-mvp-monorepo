@@ -1,0 +1,61 @@
+[project]
+name = "frontier"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "humanize>=4.11.0",
+    "loguru>=0.7.3",
+    "msgspec>=0.19.0",
+    "pytimeparse>=1.1.8",
+    "redis>=5.2.1",
+    "surrealdb>=0.4.1",
+    "telethon>=1.38.1",
+]
+
+[dependency-groups]
+dev = ["basedpyright>=1.23.1", "ruff>=0.8.4"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+pythonVersion = "3.12"
+pythonPlatform = "Linux"
+reportUnknownMemberType = false
+exclude = ["nanimai_platform/cmd/migrator", "**/__pycache__", "**/.*"]
+
+[tool.ruff]
+exclude = [".mypy_cache", ".ruff_cache", ".venv", "venv", "build", "dist"]
+line-length = 120
+indent-width = 4
+target-version = "py312"
+fix = true
+
+[tool.ruff.format]
+preview = true
+
+[tool.ruff.lint]
+select = ["E", "F", "Q", "B", "I", "UP", "C"]
+ignore = []
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402", "F401"]
+"**/{tests,docs,tools}/*" = ["E402"]
+
+[tool.ruff.lint.flake8-bandit]
+check-typed-exception = true
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 128
+
+[tool.ruff.lint.isort]
+case-sensitive = true
+force-single-line = false
