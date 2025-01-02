@@ -132,25 +132,30 @@ class Scrapper:
             await asyncio.sleep(self.cfg.application.cooldown.inner.total_seconds())
 
     async def __get_last_processed_message_id(self, source: str) -> int:
-        return int(await self.cache.get(source + ".last_processed_id") or 0)
+        return int(await self.cache.get(f"source:{source}:last_processed_id") or 0)
 
     async def __set_last_processed_message_id(self, source: str, id: int) -> None:
-        await self.cache.set(source + ".last_processed_id", id)
+        await self.cache.set(f"source:{source}:last_processed_id", id)
 
     async def __get_emojis_from_emojipack(self, short_name: str) -> list[int]:
-        cached = await self.cache.get(short_name + ".emojis")
+        cached = await self.cache.get(f"packs:{short_name}:emoji_ids")
         if cached:
             return json.loads(cached)
+        try:
+            stickerset: StickerSet = await self.client(
+                GetStickerSetRequest(InputStickerSetShortName(short_name), hash=0)
+            )  # type: ignore
+            docs: list[Document] = stickerset.documents  # type: ignore
+            emojis: list[int] = [d.id for d in docs]
+        except Exception as e:
+            emojis = []
 
-        stickerset: StickerSet = await self.client(GetStickerSetRequest(InputStickerSetShortName(short_name), hash=0))  # type: ignore
-        docs: list[Document] = stickerset.documents  # type: ignore
-        emojis: list[int] = [d.id for d in docs]
-        await self.cache.set(short_name + ".emojis", json.dumps(emojis))
+        await self.cache.set(f"packs:{short_name}:emoji_ids", json.dumps(emojis))
         return emojis
 
     async def __add_to_known_emojis(self, emojis: list[int]) -> None:
         if emojis:
-            await self.cache.sadd("known_emojis_ids", *emojis)  # type: ignore
+            await self.cache.sadd("global:emoji_ids", *emojis)  # type: ignore
 
     async def __download_emojis(self, emoji_ids: list[int]) -> list[bytes]:
         buffers = [io.BytesIO() for _ in range(len(emoji_ids))]

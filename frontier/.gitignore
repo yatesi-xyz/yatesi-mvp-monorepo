@@ -1,6 +1,7 @@
 # Project Sensitive
 config.toml
 *.session
+*.session-journal
 
 # Mac OS
 **/.DS_Store
