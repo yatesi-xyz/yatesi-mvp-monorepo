@@ -96,3 +96,25 @@ services:
         limits:
           cpus: 0.5
           memory: 200MB
+
+  frontier:
+    build:
+      context: frontier
+      dockerfile: Dockerfile
+    container_name: frontier
+    restart: unless-stopped
+    volumes:
+      - ./frontier/config.toml:/app/config.toml
+    depends_on:
+      cache:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          cpus: 0.05
+          memory: 100MB
+        limits:
+          cpus: 0.1
+          memory: 300MB

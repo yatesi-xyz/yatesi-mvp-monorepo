@@ -1,0 +1,8 @@
+**/__pycache__
+.gitignore
+.python-version
+.ruff_cache
+*.session
+.venv
+config.toml
+*.log

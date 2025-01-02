@@ -42,7 +42,7 @@ class ApplicationConfig(msgspec.Struct):
 class TelegramConfig(msgspec.Struct):
     api_id: int
     api_hash: str
-    session_file: str
+    session: str
     sources: list[str]
     phone: str
 

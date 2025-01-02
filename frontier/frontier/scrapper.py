@@ -15,6 +15,7 @@ from loguru import logger
 from redis.asyncio import Redis
 from telethon import TelegramClient
 from telethon.events import NewMessage
+from telethon.sessions import StringSession
 from telethon.tl.custom import Message
 from utils import extract_emojipack_shortname, get_message_source_name
 
@@ -32,8 +33,8 @@ class Scrapper:
 
         logger.debug("initializing telegram client")
         client: TelegramClient = await TelegramClient(
-            config.telegram.session_file, config.telegram.api_id, config.telegram.api_hash
-        ).start(phone=config.telegram.phone)  # type: ignore
+            StringSession(config.telegram.session), config.telegram.api_id, config.telegram.api_hash
+        ).start()  # type: ignore
 
         logger.debug("initializing redis cache")
         cache = Redis.from_url(config.cache.dsn)
