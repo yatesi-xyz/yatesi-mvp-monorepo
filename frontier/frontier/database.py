@@ -4,6 +4,7 @@ from typing import Self
 
 import httpx
 from config import DatabaseConfig
+from loguru import logger
 
 
 class Database:
@@ -17,18 +18,17 @@ class Database:
             base_url=f"http://{config.dsn}",
             headers={
                 "Accept": "application/json",
-                "NS": config.namespace,
-                "DB": config.database,
+                "surreal-ns": config.namespace,
+                "surreal-db": config.database,
                 "Authorization": f"Basic {base64.b64encode(f'{config.username}:{config.password}'.encode()).decode()}",
             },
+            # event_hooks={"request": [httpx_log_event_hook]},
         )
 
         ping_response = await client.post(
             "sql",
             content=textwrap.dedent(
-                f"""
-                USE NS {config.namespace};
-                USE DB {config.database};
+                """
                 RETURN 1;
                 """,
             ),
@@ -36,3 +36,33 @@ class Database:
         ping_response.raise_for_status()
 
         return cls(config, client)
+
+    async def create_emoji(self, emoji_id: int, emojipack_id: int, description: str, file: str) -> None:
+        resp = await self.client.post(
+            "sql",
+            content=textwrap.dedent(
+                f"""
+                CREATE emoji:{emoji_id} SET
+                    code = '{emoji_id}',
+                    description = '{description}',
+                    file = '{file}',
+                    hash = '',
+                    pack = emojipack:{emojipack_id};
+                """
+            ),
+            timeout=300,
+        )
+        logger.debug("database response: {}", resp.json())
+        resp.raise_for_status()
+
+    async def create_emojipack(self, emojipack_id: int, short_name: str, description: str) -> None:
+        resp = await self.client.post(
+            f"key/emojipack/{emojipack_id}",
+            json={
+                "name": short_name,
+                "description": description,
+                "hash": "",
+            },
+        )
+        logger.debug("database response: {}", resp.json())
+        resp.raise_for_status()
