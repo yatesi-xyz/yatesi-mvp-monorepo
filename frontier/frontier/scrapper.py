@@ -12,9 +12,9 @@ from redis.asyncio import Redis
 from telethon import TelegramClient
 from telethon.events import NewMessage
 from telethon.tl.custom import Message
-from telethon.tl.functions.messages import GetStickerSetRequest
-from telethon.tl.types import Channel, Chat, Document, InputStickerSetShortName, ReactionCustomEmoji, StickerSet, User
-from utils import extract_emojipack_shortname
+from telethon.tl.functions.messages import GetCustomEmojiDocumentsRequest, GetStickerSetRequest
+from telethon.tl.types import Document, InputStickerSetShortName, ReactionCustomEmoji, StickerSet
+from utils import extract_emojipack_shortname, get_message_source_name
 
 
 class Scrapper:
@@ -111,7 +111,7 @@ class Scrapper:
         logger.info("in total found {} premium emojis from message {}", len(all_emojies), message.id)
         await self.__add_to_known_emojis(all_emojies)
 
-        source = await self._get_source_name(message)
+        source = get_message_source_name(message)
         await self.__set_last_processed_message_id(source, message.id)
 
     def _stream_messages_from_sources(self, sources: list[str]) -> Streamer[Message]:
@@ -154,40 +154,9 @@ class Scrapper:
 
     async def __download_emojis(self, emoji_ids: list[int]) -> list[bytes]:
         buffers = [io.BytesIO() for _ in range(len(emoji_ids))]
+        # get parent sticker set: GetCustomEmojiDocumentsRequest[].attribute(DocumentAttributeCustomEmoji).stickerset
         await asyncio.gather(*[
             self.client.download_media(emoji_ids[i], buffers[i])  # type: ignore
             for i in range(len(emoji_ids))
         ])
         return [buffer.getvalue() for buffer in buffers]
-
-    async def _get_source_name(self, message: Message) -> str:  # noqa: C901
-        source = message.chat
-
-        if isinstance(source, str):
-            return source
-
-        if isinstance(source, int):
-            return str(source)
-
-        if isinstance(source, Channel):
-            if source.username:
-                return source.username
-            if source.usernames:
-                return source.usernames[0].username
-            if message.chat_id:
-                return str(message.chat_id)
-
-            return "unknown"
-
-        if isinstance(source, User):
-            if source.username:
-                return source.username
-            if message.chat_id:
-                return str(message.chat_id)
-
-            return "unknown"
-
-        if isinstance(source, Chat):
-            return str(source.id)
-
-        return str(message.chat_id) if message.chat_id else "unknown"
