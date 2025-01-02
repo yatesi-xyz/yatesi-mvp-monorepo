@@ -8,6 +8,9 @@ services:
       context: converter
       dockerfile: Dockerfile
       target: converter-server
+      platforms:
+        - "linux/amd64"
+    image: cr.yandex/crpek911qv82ih0gnik1/converter:latest
     container_name: converter
     restart: unless-stopped
     ports:
@@ -77,6 +80,9 @@ services:
       context: statserver
       dockerfile: Dockerfile
       target: statserver
+      platforms:
+        - "linux/amd64"
+    image: cr.yandex/crpek911qv82ih0gnik1/statserver:latest
     container_name: statserver
     restart: unless-stopped
     ports:
@@ -101,6 +107,9 @@ services:
     build:
       context: frontier
       dockerfile: Dockerfile
+      platforms:
+        - "linux/amd64"
+    image: cr.yandex/crpek911qv82ih0gnik1/frontier:latest
     container_name: frontier
     restart: unless-stopped
     volumes:

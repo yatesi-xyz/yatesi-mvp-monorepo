@@ -1,7 +1,7 @@
 FROM rust:1.83 AS chef
 WORKDIR /app
 USER root
-RUN cargo install cargo-chef
+RUN cargo -q install cargo-chef
 RUN apt-get update && apt-get install -y curl
 
 FROM chef AS planner
@@ -12,7 +12,7 @@ FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
-RUN cargo build --release --bin statserver
+RUN cargo build -q --release --bin statserver
 
 FROM debian:bookworm AS statserver
 WORKDIR /app
