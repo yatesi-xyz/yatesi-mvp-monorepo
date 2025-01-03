@@ -11,7 +11,7 @@ services:
     container_name: converter
     restart: unless-stopped
     ports:
-      - 9301:8080
+      - 127.0.0.1:9301:8080
     volumes:
       - ./converter/config.toml:/app/config.toml:ro
     deploy:
@@ -28,7 +28,7 @@ services:
     container_name: cache
     restart: unless-stopped
     ports:
-      - 9302:6379
+      - 127.0.0.1:9302:6379
     volumes:
       - ./keydb.conf:/etc/keydb/keydb.conf:ro
     command: /etc/keydb/keydb.conf
@@ -52,7 +52,7 @@ services:
     container_name: database
     restart: unless-stopped
     ports:
-      - 9303:8000
+      - 127.0.0.1:9303:8000
     volumes:
       - ./database_data:/data
     user: ${USERID}
@@ -80,7 +80,7 @@ services:
     container_name: statserver
     restart: unless-stopped
     ports:
-      - 9304:8080
+      - 127.0.0.1:9304:8080
     volumes:
       - ./statserver/config.toml:/app/config.toml:ro
     depends_on:
