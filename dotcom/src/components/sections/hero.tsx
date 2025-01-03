@@ -1,13 +1,12 @@
 'use client';
 
-import { useStatsData } from '@/lib/hooks/useStatsData';
+import { useWebSocketData } from '@/lib/hooks/useWebSocketData';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { Button } from '@/components/ui/button';
 import { BackgroundBeams } from '@/components/ui/background-beams';
 import { Spotlight } from "@/components/ui/spotlight";
-
 export function Hero() {
-  const { current, previous } = useStatsData();
+  const { current, previous } = useWebSocketData();
 
   return (
     <section className="h-screen w-full overflow-hidden relative antialiased bg-background">
