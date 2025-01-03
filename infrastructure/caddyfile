@@ -1,0 +1,13 @@
+{
+	log {
+		output file /var/caddy/caddy.log {
+			roll_size 300MiB
+			roll_keep 10
+			roll_keep_for 2160h # 90 days
+		}
+	}
+}
+
+yatesi.xyz {
+	reverse_proxy 127.0.0.1:9305
+}

@@ -1,7 +1,7 @@
 FROM rust:1.83 AS chef
 WORKDIR /app
 USER root
-RUN cargo install cargo-chef
+RUN cargo install -q cargo-chef
 RUN apt-get update && apt-get install -y \
     librlottie-dev \
     libclang1 \
