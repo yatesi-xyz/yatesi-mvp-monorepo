@@ -3234,6 +3234,7 @@ name = "statserver"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "futures",
  "humantime-serde",
  "log",
@@ -3242,6 +3243,7 @@ dependencies = [
  "serde",
  "serde_json",
  "surrealdb",
+ "thiserror 2.0.9",
  "tokio",
  "tokio-tungstenite 0.26.1",
  "toml",

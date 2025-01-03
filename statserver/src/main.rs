@@ -1,5 +1,6 @@
 mod config;
 mod updater;
+mod updater2;
 mod websocket;
 
 use anyhow::{Context, Result as AnyResult};
@@ -46,7 +47,7 @@ async fn main() -> AnyResult<()> {
             .await
     });
 
-    let results = tokio::join!(updates_task, websocket_task);
+    let results = tokio::try_join!(updates_task, websocket_task).expect("failed to join tasks");
 
-    (results.0.expect("failed to join task")).and(results.1.expect("failed to join task"))
+    (results.0).and(results.1)
 }
