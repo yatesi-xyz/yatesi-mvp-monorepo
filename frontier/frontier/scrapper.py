@@ -166,10 +166,11 @@ class Scrapper:
             )  # type: ignore
             await self.cache.set(f"emojipack:{stickerset.set.id}:data", pickle.dumps(stickerset))
             emojis: list[int] = [d.id for d in stickerset.documents]
+
+            await self.cache.set(f"emojipack:{stickerset.set.id}:emoji_ids", json.dumps(emojis))
         except Exception:
             emojis = []
 
-        await self.cache.set(f"emojipack:{stickerset.set.id}:emoji_ids", json.dumps(emojis))
         return emojis
 
     async def _get_emojipack(self, emojipack_id: int) -> tgres.StickerSet | None:
@@ -211,6 +212,9 @@ class Scrapper:
 
         # todo: should probably cache this
         docs: list[tgt.Document] = await self.client(tgreq.GetCustomEmojiDocumentsRequest([emoji_id]))
+
+        if isinstance(docs[0], tgt.DocumentEmpty):
+            return None
 
         for attribute in docs[0].attributes:
             if isinstance(attribute, tgt.DocumentAttributeCustomEmoji):
