@@ -130,7 +130,7 @@ services:
       context: dotcom
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_WEBSOCKET_URL=ws://statserver:8080
+        - NEXT_PUBLIC_WEBSOCKET_URL=wss://yatesi.xyz/ws
       platforms:
         - "linux/amd64"
     image: cr.yandex/crpek911qv82ih0gnik1/dotcom:latest

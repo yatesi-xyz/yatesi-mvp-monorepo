@@ -23,7 +23,7 @@ export function useWebSocketData() {
   const [data, setData] = useState<StatsData>(initialData);
   const [previousData, setPreviousData] = useState<StatsData>(initialData);
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   useEffect(() => {
     function connect() {
