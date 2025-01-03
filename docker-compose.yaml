@@ -14,7 +14,7 @@ services:
     container_name: converter
     restart: unless-stopped
     ports:
-      - 9301:8080
+      - 127.0.0.1:9301:8080
     volumes:
       - ./converter/config.toml:/app/config.toml:ro
     deploy:
@@ -27,16 +27,13 @@ services:
           memory: 200MB
 
   cache:
-    image: eqalpha/keydb:alpine_x86_64_v6.3.3
+    image: valkey/valkey:8-alpine
     container_name: cache
     restart: unless-stopped
     ports:
-      - 9302:6379
-    volumes:
-      - ./keydb.conf:/etc/keydb/keydb.conf:ro
-    command: /etc/keydb/keydb.conf
+      - 127.0.0.1:9302:6379
     healthcheck:
-      test: ["CMD", "keydb-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       timeout: 2s
       retries: 3
@@ -55,7 +52,7 @@ services:
     container_name: database
     restart: unless-stopped
     ports:
-      - 9303:8000
+      - 127.0.0.1:9303:8000
     volumes:
       - ./database_data:/data
     user: ${USERID}
@@ -86,7 +83,7 @@ services:
     container_name: statserver
     restart: unless-stopped
     ports:
-      - 9304:8080
+      - 127.0.0.1:9304:8080
     volumes:
       - ./statserver/config.toml:/app/config.toml:ro
     depends_on:
