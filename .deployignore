@@ -1,0 +1,73 @@
+# Project Specific
+experiments
+database_data
+.ropeproject
+*.session
+
+# Version Control
+.git/
+.gitignore
+.svn/
+
+# Python
+.ruff_cache
+.mypy_cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+.env
+.venv
+env/
+ENV/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Rust
+target/
+debug/
+release/
+**/*.rs.bk
+Cargo.lock
+.rustc_info.json
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# Temp files
+tmp/
+temp/
+.tmp/
+*.tmp

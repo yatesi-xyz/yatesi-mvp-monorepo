@@ -8,6 +8,9 @@ services:
       context: converter
       dockerfile: Dockerfile
       target: converter-server
+      platforms:
+        - "linux/amd64"
+    image: cr.yandex/crpek911qv82ih0gnik1/converter:latest
     container_name: converter
     restart: unless-stopped
     ports:
@@ -77,6 +80,9 @@ services:
       context: statserver
       dockerfile: Dockerfile
       target: statserver
+      platforms:
+        - "linux/amd64"
+    image: cr.yandex/crpek911qv82ih0gnik1/statserver:latest
     container_name: statserver
     restart: unless-stopped
     ports:
@@ -96,3 +102,28 @@ services:
         limits:
           cpus: 0.5
           memory: 200MB
+
+  frontier:
+    build:
+      context: frontier
+      dockerfile: Dockerfile
+      platforms:
+        - "linux/amd64"
+    image: cr.yandex/crpek911qv82ih0gnik1/frontier:latest
+    container_name: frontier
+    restart: unless-stopped
+    volumes:
+      - ./frontier/config.toml:/app/config.toml
+    depends_on:
+      cache:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          cpus: 0.05
+          memory: 100MB
+        limits:
+          cpus: 0.1
+          memory: 300MB
