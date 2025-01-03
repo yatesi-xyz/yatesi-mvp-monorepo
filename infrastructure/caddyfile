@@ -9,5 +9,10 @@
 }
 
 yatesi.xyz {
+	reverse_proxy /ws 127.0.0.1:9304
 	reverse_proxy 127.0.0.1:9305
+}
+
+surrealdb.yatesi.xyz {
+	reverse_proxy 127.0.0.1:9303
 }

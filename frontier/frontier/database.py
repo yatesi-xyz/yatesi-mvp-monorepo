@@ -38,6 +38,8 @@ class Database:
         return cls(config, client)
 
     async def create_emoji(self, emoji_id: int, emojipack_id: int, description: str, file: str) -> None:
+        description = description.replace("'", "\\'")
+
         resp = await self.client.post(
             "sql",
             content=textwrap.dedent(
@@ -53,7 +55,7 @@ class Database:
             timeout=300,
         )
         logger.debug("database response: {}", resp.json())
-        resp.raise_for_status()
+        _ = resp.raise_for_status()
 
     async def create_emojipack(self, emojipack_id: int, short_name: str, description: str) -> None:
         resp = await self.client.post(
@@ -65,4 +67,4 @@ class Database:
             },
         )
         logger.debug("database response: {}", resp.json())
-        resp.raise_for_status()
+        _ = resp.raise_for_status()
