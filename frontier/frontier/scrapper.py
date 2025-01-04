@@ -110,10 +110,15 @@ class Scrapper:
             logger.debug("found {} premium emojis", counter)
 
         all_emojies = sorted(set(premium_emojis_document_ids))
-        emojipack_ids = await asyncio.gather(*[self._get_parent_emojipack_id(emoji) for emoji in all_emojies])
+        logger.info("in total found {} premium emojis", len(all_emojies))
 
-        logger.info("in total found {} premium emojis from {} emojipacks", len(all_emojies), len(set(emojipack_ids)))
-        await self._add_to_known_emojis(all_emojies)
+        is_emoji_known = await asyncio.gather(*[self._is_emoji_known(emoji) for emoji in all_emojies])
+        all_emojies = [emoji for emoji, known in zip(all_emojies, is_emoji_known, strict=True) if not known]
+
+        emojipack_ids = await asyncio.gather(*[self._get_parent_emojipack_id(emoji) for emoji in all_emojies])
+        logger.info(
+            "in total found {} new premium emojis from {} emojipacks", len(all_emojies), len(set(emojipack_ids))
+        )
 
         emojipacks_data = await asyncio.gather(*[
             self._get_emojipack(emojipack_id) if emojipack_id else asyncio.sleep(0, result=None)
@@ -132,6 +137,8 @@ class Scrapper:
             for emoji_id, emojipack in zip(all_emojies, emojipacks_data, strict=False)
             if emojipack is not None
         ])
+
+        await self._add_to_known_emojis(all_emojies)
 
         source = get_message_source_name(message)
         await self.__set_last_processed_message_id(source, message.id)
@@ -249,6 +256,9 @@ class Scrapper:
     async def _add_to_known_emojis(self, emojis: list[int]) -> None:
         if emojis:
             await self.cache.sadd("global:emoji_ids", *emojis)  # type: ignore
+
+    async def _is_emoji_known(self, emoji_id: int) -> bool:
+        return await self.cache.sismember("global:emoji_ids", emoji_id)  # type: ignore
 
     async def _download_emojis(self, emoji_ids: list[int]) -> list[bytes]:
         buffers = [io.BytesIO() for _ in range(len(emoji_ids))]
