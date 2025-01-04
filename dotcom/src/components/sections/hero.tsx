@@ -5,6 +5,7 @@ import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { Button } from '@/components/ui/button';
 import { BackgroundBeams } from '@/components/ui/background-beams';
 import { Spotlight } from "@/components/ui/spotlight";
+import { ThemeToggle } from '../ui/theme-toggle';
 export function Hero() {
   const { current, previous } = useWebSocketData();
 
@@ -25,19 +26,15 @@ export function Hero() {
             </h1>
 
             <p className="text-xl md:text-2xl text-muted-foreground mt-8 mb-12">
-              The smartest ever Telegram Emoji Search Index
+              The <span className="font-bold">smartest ever</span> Telegram Emoji Search
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
               <Button
                 size="lg"
-                variant="default"
-                className="font-semibold relative overflow-hidden group bg-primary/90 hover:bg-primary/80"
+                variant="outline"
+                className="font-semibold backdrop-blur-sm"
               >
-                <Spotlight
-                  className="absolute inset-0"
-                  fill="rgba(255, 255, 255, 0.2)"
-                />
                 Get Started
               </Button>
               <Button
@@ -47,6 +44,7 @@ export function Hero() {
               >
                 How it works?
               </Button>
+              <ThemeToggle />
             </div>
           </div>
         </div>
